@@ -179,7 +179,7 @@ class MainWindow(QMainWindow):
         self.lbl_status.setStyleSheet("font-weight: bold; color: #8b0000;")
 
     def _salvar_config(self):
-        formas = Path(self.formas_input.text().strip())
+        formas   = Path(self.formas_input.text().strip())
         txt = Path(self.txt_input.text().strip())
         processados = Path(self.processados_input.text().strip())
         indice_texto = self.indice_input.text().strip()
