@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QDialog, QDialogButtonBox, QMessageBox
 )
 from PySide6.QtCore import Qt, QEvent
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QIcon
 
 from src.server.server import Server
 from src.config import settings
@@ -17,8 +17,9 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("EresTracer Server")
-        self.resize(700, 500)
+        self.setWindowIcon(QIcon("TraceLink.ico"))
+        self.setWindowTitle("TraceLink Server")
+        self.resize(580, 500)
 
         self.server = Server()
 
@@ -170,7 +171,7 @@ class MainWindow(QWidget):
             return
 
         try:
-            settings.salvar_config(
+            settings.atualizar_config(
                 host=host,
                 endpoint=endpoint,
                 ext=ext,

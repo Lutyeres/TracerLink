@@ -1,7 +1,9 @@
 import re
 from pathlib import Path
 import urllib.request
+import hashlib
 
+from src.config.base import BASE_DIR
 from src.config import settings
 from src.utils.logger import log
 
@@ -15,6 +17,7 @@ class Job:
     def __init__(self):
         settings.carregar_config()
 
+        self.hash_file = BASE_DIR / ".last_hash"
         self.host = settings.get_host()
         self.endpoint = settings.get_endpoint()
         self.ext = settings.get_ext()
@@ -26,14 +29,21 @@ class Job:
     # EXECUÇÃO PRINCIPAL
     # =============================
 
+    def _generate_hash(self, content: str) -> str:
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
     def run_once(self):
 
         if not self.host:
             log("Host não configurado.")
             return
 
-        url = f"{self.host}{self.endpoint}"
-        log(f"GET {url}")
+        # Garante protocolo
+        host = self.host
+        # if not host.startswith("http"):
+        #     host = "http://" + host
+        #
+        url = f"{host}{self.endpoint}"
 
         try:
             content = self._http_get(url)
@@ -48,10 +58,35 @@ class Job:
 
         content = self._ensure_complete_file(content)
 
-        file_path = self.pasta / f"{job_id}.{self.ext}"
-        file_path.write_text(content, encoding="utf-8")
+        current_hash = self._generate_hash(content)
 
-        log(f"Arquivo salvo: {file_path}")
+        # Verifica hash anterior
+        if self.hash_file.exists():
+            try:
+                last_hash = self.hash_file.read_text().strip()
+                if current_hash == last_hash:
+                    log("Job não alterado. Nenhum arquivo salvo.")
+                    return
+            except Exception:
+                # Se der erro ao ler hash, continua e sobrescreve
+                pass
+
+        # Salva arquivo
+        file_path = self.pasta / f"{job_id}.{self.ext}"
+
+        try:
+            file_path.write_text(content, encoding="utf-8")
+        except Exception as e:
+            log(f"Erro ao salvar arquivo: {e}")
+            return
+
+        # Atualiza hash
+        try:
+            self.hash_file.write_text(current_hash)
+        except Exception as e:
+            log(f"Erro ao salvar hash: {e}")
+
+        log(f"Novo job detectado. Arquivo salvo: {file_path}")
 
     # =============================
     # HTTP
