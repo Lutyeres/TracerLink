@@ -1,71 +1,70 @@
-from configparser import ConfigParser
+import configparser
 from pathlib import Path
 from src.config.base import BASE_DIR
-from typing import Optional
 
-INI_PATH = BASE_DIR / "config.ini"
+CONFIG_FILE = BASE_DIR / "config.ini"
 
-config = ConfigParser()
+config = configparser.ConfigParser()
+
 
 def criar_config_padrao():
-    config["PARAMETROS"] = {
+    config["SERVER"] = {
         "host": "",
-        "pasta": "",
-        "ext": ""
+        "endpoint": "/jobs/currentJob.oma",
+        "ext": "txt",
+        "poll_seconds": "5"
     }
 
+    config["STORAGE"] = {
+        "pasta": str(BASE_DIR / "FormasTracer")
+    }
 
-    with open(INI_PATH, "w") as f:
-        config.write(f)
+    salvar_config()
 
 
 def carregar_config():
-    if not INI_PATH.exists():
+    if not CONFIG_FILE.exists():
         criar_config_padrao()
+    config.read(CONFIG_FILE)
 
-    config.read(INI_PATH)
 
-    # Garante que seções existam
-    if "PARAMETROS" not in config:
-        config["PASTAS"] = {}
+def atualizar_config(host, endpoint, ext, poll_seconds, pasta):
 
-    if "host" not in config["PARAMETROS"]:
-        config["PARAMETROS"]["host"] = ""
-    if "pasta" not in config["PARAMETROS"]:
-        config["PARAMETROS"]["pasta"] = ""
-    if "ext" not in config["PARAMETROS"]:
-        config["PARAMETROS"]["ext"] = ""
+    if "SERVER" not in config:
+        config["SERVER"] = {}
 
-    with open(INI_PATH, "w", encoding="utf-8") as f:
+    if "STORAGE" not in config:
+        config["STORAGE"] = {}
+
+    config["SERVER"]["host"] = host
+    config["SERVER"]["endpoint"] = endpoint
+    config["SERVER"]["ext"] = ext
+    config["SERVER"]["poll_seconds"] = str(poll_seconds)
+    config["STORAGE"]["pasta"] = pasta
+
+    salvar_config()
+
+
+def salvar_config():
+    with open(CONFIG_FILE, "w") as f:
         config.write(f)
 
 
-# Carrega automaticamente ao importar
-carregar_config()
+def get_host():
+    return config["SERVER"].get("host", "")
 
 
-def _get_parametros(nome: str) -> Optional[Path]:
-    valor = config.get("PARAMETROS", nome, fallback="").strip()
-    if not valor:
-        return None
-    return Path(valor)
+def get_endpoint():
+    return config["SERVER"].get("endpoint", "")
 
 
-def get_parametros_host() -> Optional[Path]:
-    return _get_parametros("host")
-
-def get_parametros_pasta() -> Optional[Path]:
-    return _get_parametros("pasta")
-
-def get_parametros_ext() -> Optional[Path]:
-    return _get_parametros("ext")
+def get_ext():
+    return config["SERVER"].get("ext", "txt")
 
 
+def get_poll_seconds():
+    return int(config["SERVER"].get("poll_seconds", 5))
 
-def salvar_config(host, pasta, ext):
-    config.set("PARAMETROS", "host", str(host))
-    config.set("PARAMETROS", "pasta", str(pasta))
-    config.set("PARAMETROS", "ext", str(ext))
 
-    with open(INI_PATH, "w") as f:
-        config.write(f)
+def get_pasta():
+    return config["STORAGE"].get("pasta", "")
