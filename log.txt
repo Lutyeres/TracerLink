@@ -25,3 +25,6 @@
 [2026-03-01 01:21:32] Somente lado R detectado. Criando lado L.
 [2026-03-01 01:24:54] Somente lado R detectado. Criando lado L.
 [2026-03-01 01:26:32] Somente lado L detectado. Criando lado R.
+[2026-03-02 20:36:31] Server iniciado.
+[2026-03-02 20:36:46] Estado alterado para: ERROR
+[2026-03-02 20:36:58] Server parado.

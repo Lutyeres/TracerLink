@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QColor, QIcon
+from PySide6.QtCore import Signal
 
 from src.server.server import Server
 from src.config import settings
@@ -13,6 +14,7 @@ from src.utils.logger import set_panel_callback
 
 
 class MainWindow(QWidget):
+    log_signal = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -49,6 +51,7 @@ class MainWindow(QWidget):
         self._carregar_campos()
 
         self._update_status(False)
+        self.log_signal.connect(self._append_log_ui)
 
     # ======================================================
     # MONITOR TAB
@@ -231,7 +234,17 @@ class MainWindow(QWidget):
     # ======================================================
 
     def append_log(self, text):
+        self.log_signal.emit(text)
+
+    def _append_log_ui(self, text):
+
+        scrollbar = self.monitor.verticalScrollBar()
+        at_bottom = scrollbar.value() >= scrollbar.maximum() - 2
+
         self.monitor.append(text)
+
+        if at_bottom:
+            scrollbar.setValue(scrollbar.maximum())
 
     def _carregar_campos(self):
         self.input_host.setText(settings.get_host())
