@@ -25,11 +25,31 @@ class Job:
         self.endpoint = settings.get_endpoint()
         self.ext = settings.get_ext()
         self.pasta = Path(settings.get_pasta())
+        self.pasta_formas_siou = Path(settings.get_pasta_formas_siou())
+
+        if not str(self.pasta_formas_siou).strip():
+            self.pasta_formas_siou = self._resolve_formas_siou_folder()
 
         self.pasta.mkdir(parents=True, exist_ok=True)
 
         self._last_state = None
         self._previous_state = None
+
+    def _resolve_formas_siou_folder(self) -> Path:
+        candidates = [
+            BASE_DIR / "formas siou",
+            BASE_DIR / "Formas Siou",
+            BASE_DIR / "FormasSiou",
+            self.pasta.parent / "formas siou",
+            self.pasta.parent / "Formas Siou",
+            self.pasta.parent / "FormasSiou",
+        ]
+
+        for candidate in candidates:
+            if candidate.exists() and candidate.is_dir():
+                return candidate
+
+        return candidates[0]
 
     # ==================================================
     # EXECUÇÃO PRINCIPAL
@@ -81,6 +101,10 @@ class Job:
             self._emit_state_log()
             return
 
+        log(f"Job salvo: {file_path.name}")
+
+        self._process_formas_siou_files(job_id)
+
         try:
             self.hash_file.write_text(current_hash)
         except Exception:
@@ -94,6 +118,10 @@ class Job:
     # ==================================================
 
     def _emit_state_log(self):
+        if self._last_state == "UNCHANGED":
+            self._previous_state = self._last_state
+            return
+
         if self._last_state != self._previous_state:
             log(f"Estado alterado para: {self._last_state}")
         self._previous_state = self._last_state
@@ -115,6 +143,28 @@ class Job:
     def _extract_job_id(self, content: str):
         match = re.search(r"\b(?:JOB|job)\s*=\s*([0-9]+)\b", content)
         return match.group(1) if match else None
+
+    def _process_formas_siou_files(self, job_id: str):
+        if not self.pasta_formas_siou.exists():
+            log(f"Pasta 'formas siou' não encontrada: {self.pasta_formas_siou}")
+            return
+
+        padded_job_id = str(job_id).zfill(6)
+        transformed_job_id = f"{padded_job_id[0]}T{padded_job_id[2:]}"
+
+        for side in ("L", "R"):
+            source = self.pasta_formas_siou / f"{side}{padded_job_id}.dat"
+            target = self.pasta_formas_siou / f"{side}{transformed_job_id}.dat"
+
+            if not source.exists():
+                log(f"Arquivo não encontrado em formas siou: {source.name}")
+                continue
+
+            try:
+                target.write_bytes(source.read_bytes())
+                log(f"Arquivo gerado em formas siou: {target.name}")
+            except Exception as e:
+                log(f"Erro ao gerar arquivo '{target.name}': {e}")
 
     # ==================================================
     # REGRA PRINCIPAL DE ESPELHO
