@@ -16,7 +16,8 @@ def criar_config_padrao():
     }
 
     config["STORAGE"] = {
-        "pasta": str(BASE_DIR / "FormasTracer")
+        "pasta": str(BASE_DIR / "FormasTracer"),
+        "pasta_formas_siou": str(BASE_DIR / "formas siou"),
     }
 
     salvar_config()
@@ -25,10 +26,30 @@ def criar_config_padrao():
 def carregar_config():
     if not CONFIG_FILE.exists():
         criar_config_padrao()
+
     config.read(CONFIG_FILE)
 
+    if "SERVER" not in config:
+        config["SERVER"] = {}
 
-def atualizar_config(host, endpoint, ext, poll_seconds, pasta):
+    if "STORAGE" not in config:
+        config["STORAGE"] = {}
+
+    changed = False
+
+    if "pasta" not in config["STORAGE"]:
+        config["STORAGE"]["pasta"] = str(BASE_DIR / "FormasTracer")
+        changed = True
+
+    if "pasta_formas_siou" not in config["STORAGE"]:
+        config["STORAGE"]["pasta_formas_siou"] = str(BASE_DIR / "formas siou")
+        changed = True
+
+    if changed:
+        salvar_config()
+
+
+def atualizar_config(host, endpoint, ext, poll_seconds, pasta, pasta_formas_siou):
 
     if "SERVER" not in config:
         config["SERVER"] = {}
@@ -41,6 +62,7 @@ def atualizar_config(host, endpoint, ext, poll_seconds, pasta):
     config["SERVER"]["ext"] = ext
     config["SERVER"]["poll_seconds"] = str(poll_seconds)
     config["STORAGE"]["pasta"] = pasta
+    config["STORAGE"]["pasta_formas_siou"] = pasta_formas_siou
 
     salvar_config()
 
@@ -67,4 +89,8 @@ def get_poll_seconds():
 
 
 def get_pasta():
-    return config["STORAGE"].get("pasta", "")
+    return config["STORAGE"].get("pasta", str(BASE_DIR / "FormasTracer"))
+
+
+def get_pasta_formas_siou():
+    return config["STORAGE"].get("pasta_formas_siou", str(BASE_DIR / "formas siou"))

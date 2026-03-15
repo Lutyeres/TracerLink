@@ -158,12 +158,14 @@ class MainWindow(QWidget):
         self.input_ext = QLineEdit()
         self.input_poll = QLineEdit()
         self.input_pasta = QLineEdit()
+        self.input_pasta_formas_siou = QLineEdit()
 
         form.addRow("Host:", self.input_host)
         form.addRow("Endpoint:", self.input_endpoint)
         form.addRow("Extensão:", self.input_ext)
         form.addRow("Intervalo (s):", self.input_poll)
         form.addRow("Pasta:", self.input_pasta)
+        form.addRow("Pasta formas siou:", self.input_pasta_formas_siou)
 
         main_layout.addLayout(form)
 
@@ -217,6 +219,7 @@ class MainWindow(QWidget):
         ext = self.input_ext.text().strip()
         poll = self.input_poll.text().strip()
         pasta = self.input_pasta.text().strip()
+        pasta_formas_siou = self.input_pasta_formas_siou.text().strip()
 
         if not host:
             QMessageBox.critical(self, "Erro", "Host não pode ser vazio.")
@@ -237,6 +240,7 @@ class MainWindow(QWidget):
                 ext=ext,
                 poll_seconds=poll,
                 pasta=pasta,
+                pasta_formas_siou=pasta_formas_siou,
             )
 
         except Exception as e:
@@ -315,6 +319,7 @@ class MainWindow(QWidget):
         self.input_ext.setText(settings.get_ext())
         self.input_poll.setText(str(settings.get_poll_seconds()))
         self.input_pasta.setText(settings.get_pasta())
+        self.input_pasta_formas_siou.setText(settings.get_pasta_formas_siou())
 
     # ======================================================
 
