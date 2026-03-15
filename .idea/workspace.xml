@@ -2,14 +2,12 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="d619e9e4-c142-4146-bdfe-ec0f9527f0e1" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/src/domain/gerador_tracado.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.last_hash" beforeDir="false" afterPath="$PROJECT_DIR$/.last_hash" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/config.ini" beforeDir="false" afterPath="$PROJECT_DIR$/config.ini" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/dist/.last_hash" beforeDir="false" afterPath="$PROJECT_DIR$/dist/.last_hash" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/dist/config.ini" beforeDir="false" afterPath="$PROJECT_DIR$/dist/config.ini" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/dist/log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/dist/log.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/log.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/domain/job.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/domain/job.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/domain/gerador_tracado.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/domain/gerador_tracado.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/main_window.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/main_window.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

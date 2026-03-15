@@ -4,16 +4,17 @@ from PySide6.QtWidgets import (
     QLabel, QFormLayout, QHBoxLayout,
     QDialog, QDialogButtonBox, QMessageBox
 )
-from PySide6.QtCore import Qt, QEvent
-from PySide6.QtGui import QColor, QIcon
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, QEvent, Signal
+from PySide6.QtGui import QIcon
 
 from src.server.server import Server
 from src.config import settings
 from src.utils.logger import set_panel_callback
+from src.domain.gerador_tracado import GeradorTracado
 
 
 class MainWindow(QWidget):
+
     log_signal = Signal(str)
 
     def __init__(self):
@@ -26,16 +27,20 @@ class MainWindow(QWidget):
         self.server = Server()
 
         self.tabs = QTabWidget()
+
         self.tab_monitor = QWidget()
+        self.tab_armacao = QWidget()
         self.tab_config = QWidget()
 
         self.tabs.addTab(self.tab_monitor, "Server Monitor")
+        self.tabs.addTab(self.tab_armacao, "Armação")
         self.tabs.addTab(self.tab_config, "Configuração")
 
-        self._config_tab_index = 1
+        self._config_tab_index = 2
         self._acesso_config_liberado = False
 
         self._build_monitor_tab()
+        self._build_armacao_tab()
         self._build_config_tab()
 
         main_layout = QVBoxLayout()
@@ -44,7 +49,6 @@ class MainWindow(QWidget):
 
         set_panel_callback(self.append_log)
 
-        # Intercepta clique na aba
         self.tabs.tabBar().installEventFilter(self)
 
         settings.carregar_config()
@@ -61,7 +65,6 @@ class MainWindow(QWidget):
 
         layout = QVBoxLayout()
 
-        # Linha superior
         top_layout = QHBoxLayout()
 
         self.btn_start = QPushButton("Iniciar")
@@ -92,6 +95,56 @@ class MainWindow(QWidget):
         self.tab_monitor.setLayout(layout)
 
     # ======================================================
+    # ARMAÇÃO TAB
+    # ======================================================
+
+    def _build_armacao_tab(self):
+
+        layout = QVBoxLayout()
+
+        form = QFormLayout()
+
+        self.input_nome_arquivo = QLineEdit()
+        self.input_nome_arquivo.setPlaceholderText("Ex: pedido_140164")
+
+        form.addRow("Nome do arquivo:", self.input_nome_arquivo)
+
+        layout.addLayout(form)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        self.btn_gerar_tracado = QPushButton("Gerar Desenho")
+        self.btn_gerar_tracado.setFixedWidth(140)
+        self.btn_gerar_tracado.clicked.connect(self._gerar_tracado)
+
+        btn_layout.addWidget(self.btn_gerar_tracado)
+
+        layout.addLayout(btn_layout)
+        layout.addStretch()
+
+        self.tab_armacao.setLayout(layout)
+
+    def _gerar_tracado(self):
+
+        nome = self.input_nome_arquivo.text().strip()
+
+        if not nome:
+            QMessageBox.critical(self, "Erro", "Informe o nome do arquivo.")
+            return
+
+        try:
+
+            gerador = GeradorTracado(nome)
+            gerador.visualizar()
+
+            self.append_log(f"[ARMAÇÃO] Desenho gerado para {nome}")
+
+        except Exception as e:
+
+            QMessageBox.critical(self, "Erro", str(e))
+
+    # ======================================================
     # CONFIG TAB
     # ======================================================
 
@@ -114,7 +167,6 @@ class MainWindow(QWidget):
 
         main_layout.addLayout(form)
 
-        # Botão salvar
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -123,6 +175,7 @@ class MainWindow(QWidget):
         self.btn_salvar.clicked.connect(self._salvar_config)
 
         btn_layout.addWidget(self.btn_salvar)
+
         main_layout.addLayout(btn_layout)
 
         self.tab_config.setLayout(main_layout)
@@ -146,11 +199,16 @@ class MainWindow(QWidget):
             self.status_label.setStyleSheet("color: green; font-weight: bold;")
             self.btn_start.setEnabled(False)
             self.btn_stop.setEnabled(True)
+
         else:
             self.status_label.setText("Desconectado")
             self.status_label.setStyleSheet("color: red; font-weight: bold;")
             self.btn_start.setEnabled(True)
             self.btn_stop.setEnabled(False)
+
+    # ======================================================
+    # SALVAR CONFIG
+    # ======================================================
 
     def _salvar_config(self):
 
@@ -160,7 +218,6 @@ class MainWindow(QWidget):
         poll = self.input_poll.text().strip()
         pasta = self.input_pasta.text().strip()
 
-        # Validação simples
         if not host:
             QMessageBox.critical(self, "Erro", "Host não pode ser vazio.")
             return
@@ -181,12 +238,14 @@ class MainWindow(QWidget):
                 poll_seconds=poll,
                 pasta=pasta,
             )
+
         except Exception as e:
             QMessageBox.critical(self, "Erro", str(e))
             return
 
         QMessageBox.information(self, "Sucesso", "Configuração salva com sucesso.")
         self.append_log("[CONFIG] Configuração salva.")
+
     # ======================================================
     # LOGIN CONFIG
     # ======================================================
@@ -205,7 +264,7 @@ class MainWindow(QWidget):
         return False
 
     # ======================================================
-    # EVENT FILTER PARA ABA
+    # EVENT FILTER
     # ======================================================
 
     def eventFilter(self, watched, event):
@@ -217,7 +276,6 @@ class MainWindow(QWidget):
 
             if indice_clicado == self._config_tab_index:
 
-                # Sempre parar o server ao abrir config
                 if self.server.is_running():
                     self.server.stop()
                     self._update_status(False)
@@ -230,7 +288,7 @@ class MainWindow(QWidget):
         return super().eventFilter(watched, event)
 
     # ======================================================
-    # OUTROS
+    # LOG
     # ======================================================
 
     def append_log(self, text):
@@ -246,12 +304,19 @@ class MainWindow(QWidget):
         if at_bottom:
             scrollbar.setValue(scrollbar.maximum())
 
+    # ======================================================
+    # CARREGAR CONFIG
+    # ======================================================
+
     def _carregar_campos(self):
+
         self.input_host.setText(settings.get_host())
         self.input_endpoint.setText(settings.get_endpoint())
         self.input_ext.setText(settings.get_ext())
         self.input_poll.setText(str(settings.get_poll_seconds()))
         self.input_pasta.setText(settings.get_pasta())
+
+    # ======================================================
 
     def closeEvent(self, event):
         self.server.stop()
@@ -265,6 +330,7 @@ class MainWindow(QWidget):
 class LoginDialog(QDialog):
 
     def __init__(self, parent=None):
+
         super().__init__(parent)
 
         self.setWindowTitle("Login")

@@ -1,103 +1,163 @@
 import math
-from pathlib import Path
 import matplotlib.pyplot as plt
+from pathlib import Path
 
-from src.config.config import get_pasta
+from src.config import settings
 
 
 class GeradorTracado:
 
     def __init__(self, nome_arquivo):
 
-        pasta = Path(get_pasta())
+        settings.carregar_config()
 
-        if not pasta.exists():
-            raise FileNotFoundError(f"Pasta configurada não encontrada: {pasta}")
+        pasta = Path(settings.get_pasta())
+        ext = settings.get_ext()
 
-        self.arquivo = pasta / nome_arquivo
+        if not nome_arquivo.endswith(f".{ext}"):
+            nome_arquivo = f"{nome_arquivo}.{ext}"
 
-        if not self.arquivo.exists():
-            raise FileNotFoundError(f"Arquivo não encontrado: {self.arquivo}")
+        self.caminho = pasta / nome_arquivo
 
-        self.valores_r = []
+        if not self.caminho.exists():
+            raise FileNotFoundError(f"Arquivo não encontrado: {self.caminho}")
 
-    # ======================================================
-    # LEITURA DO ARQUIVO
-    # ======================================================
+    # -----------------------------------------------------
 
-    def carregar(self):
+    def _extrair_blocos(self):
 
-        valores = []
+        r_values = []
+        l_values = []
 
-        with open(self.arquivo, "r", encoding="utf-8") as f:
+        lendo_r = False
+        lendo_l = False
 
-            for line in f:
+        with open(self.caminho, "r", encoding="utf-8") as f:
 
-                if line.startswith("R="):
+            for linha in f:
 
-                    numeros = line[2:].split(";")
+                linha = linha.strip()
 
-                    for n in numeros:
+                if linha.startswith("TRCFMT"):
 
-                        n = n.strip()
+                    if ";R;" in linha:
+                        lendo_r = True
+                        lendo_l = False
+                        continue
 
-                        if n:
-                            valores.append(float(n))
+                    if ";L;" in linha:
+                        lendo_l = True
+                        lendo_r = False
+                        continue
 
-        if len(valores) < 800:
-            raise ValueError(
-                f"Arquivo inválido. Esperado 800 pontos, encontrado {len(valores)}"
-            )
+                if linha.startswith("R="):
 
-        self.valores_r = valores[:800]
+                    valores = linha[2:].split(";")
+                    numeros = [float(v) /100 for v in valores if v]
 
-    # ======================================================
-    # POLAR → CARTESIANO
-    # ======================================================
+                    if lendo_r:
+                        r_values.extend(numeros)
 
-    def gerar_xy(self):
+                    elif lendo_l:
+                        l_values.extend(numeros)
+
+        if not r_values and not l_values:
+            raise Exception("Nenhum dado de traçado encontrado.")
+
+        return r_values, l_values
+
+    # -----------------------------------------------------
+
+    def _polar_para_cartesiano(self, valores):
 
         x = []
         y = []
 
-        total = len(self.valores_r)
+        total = len(valores)
 
-        for i, r in enumerate(self.valores_r):
+        for i, r in enumerate(valores):
 
-            angle = 2 * math.pi * i / total
+            angulo = 2 * math.pi * i / total
 
-            x.append(r * math.cos(angle))
-            y.append(r * math.sin(angle))
+            x.append(r * math.cos(angulo))
+            y.append(r * math.sin(angulo))
 
         return x, y
 
-    # ======================================================
-    # PLOT
-    # ======================================================
+    # -----------------------------------------------------
 
-    def plotar(self):
+    def _extrair_parametros(self):
 
-        x, y = self.gerar_xy()
+        hbox_r = hbox_l = None
+        vbox_r = vbox_l = None
+        dbl = 0
 
-        plt.figure(f"Traçado - {self.arquivo.name}")
+        with open(self.caminho, "r", encoding="utf-8") as f:
 
-        plt.plot(x, y)
+            for linha in f:
 
-        plt.gca().set_aspect("equal", adjustable="box")
+                linha = linha.strip()
 
-        plt.title("Formato da Lente")
-        plt.xlabel("X")
-        plt.ylabel("Y")
+                if linha.startswith("HBOX="):
 
-        plt.grid(True)
+                    valores = linha.split("=")[1].split(";")
+                    hbox_r = float(valores[0])
+                    hbox_l = float(valores[1])
 
-        plt.show()
+                elif linha.startswith("VBOX="):
 
-    # ======================================================
-    # EXECUÇÃO COMPLETA
-    # ======================================================
+                    valores = linha.split("=")[1].split(";")
+                    vbox_r = float(valores[0])
+                    vbox_l = float(valores[1])
+
+                elif linha.startswith("DBL="):
+
+                    dbl = float(linha.split("=")[1])
+                    print(dbl)
+
+        if hbox_r is None or hbox_l is None:
+            raise Exception("HBOX não encontrado no arquivo")
+
+        return hbox_r, hbox_l, dbl
 
     def visualizar(self):
+        r_values, l_values = self._extrair_blocos()
+        hbox_r, hbox_l, dbl = self._extrair_parametros()
 
-        self.carregar()
-        self.plotar()
+        plt.figure(figsize=(14, 7))
+
+        # 1. Normalização: Garantir que cada lente comece centrada em seu próprio eixo local
+        # (Isso corrige se os dados brutos vierem com algum deslocamento estranho)
+
+        if r_values:
+            x_r, y_r = self._polar_para_cartesiano(l_values)
+            # Centraliza a lente na origem (0,0) antes de mover
+            x_r = [v - (min(x_r) + max(x_r)) / 2 for v in x_r]
+
+            # Desloca para a direita: metade da largura da lente + metade da ponte
+            distancia_centro_r = (hbox_r / 2) + (dbl / 2)
+            x_r = [v + distancia_centro_r for v in x_r]
+            plt.plot(x_r, y_r, label=f"Direita (HBOX={hbox_r})")
+
+        if l_values:
+            x_l, y_l = self._polar_para_cartesiano(r_values)
+            # Centraliza a lente na origem (0,0) antes de mover
+            x_l = [v - (min(x_l) + max(x_l)) / 2 for v in x_l]
+
+            # Desloca para a esquerda: (metade da largura da lente + metade da ponte) negativo
+            distancia_centro_l = -((hbox_l / 2) + (dbl / 2))
+            x_l = [v + distancia_centro_l for v in x_l]
+            plt.plot(x_l, y_l, label=f"Esquerda (HBOX={hbox_l})")
+
+        # Ajustes de exibição para ver a separação
+        plt.gca().set_aspect("equal")
+        plt.axvline(0, color='red', linestyle='--', label="Eixo Central (Ponte)")
+
+        # Desenha linhas guias para a ponte (DBL)
+        plt.axvline(dbl / 2, color='gray', linestyle=':', alpha=0.5)
+        plt.axvline(-dbl / 2, color='gray', linestyle=':', alpha=0.5)
+
+        plt.legend()
+        plt.grid(True, which='both', linestyle='-', alpha=0.2)
+        plt.title(f"Visualização Óptica - DBL: {dbl}")
+        plt.show()
