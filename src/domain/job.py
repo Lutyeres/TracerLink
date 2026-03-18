@@ -1,4 +1,5 @@
 import re
+import time
 from pathlib import Path
 import urllib.request
 import hashlib
@@ -102,7 +103,7 @@ class Job:
             return
 
         log(f"Job salvo: {file_path.name}")
-
+        time.sleep(10)
         self._process_formas_siou_files(job_id)
 
         try:
