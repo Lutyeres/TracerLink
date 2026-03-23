@@ -103,7 +103,7 @@ class Job:
             return
 
         log(f"Job salvo: {file_path.name}")
-        time.sleep(10)
+        time.sleep(25)
         self._process_formas_siou_files(job_id)
 
         try:
