@@ -1,5 +1,6 @@
 import re
 import time
+from datetime import date
 from pathlib import Path
 import urllib.request
 import hashlib
@@ -156,16 +157,66 @@ class Job:
         for side in ("L", "R"):
             source = self.pasta_formas_siou / f"{side}{padded_job_id}.dat"
             target = self.pasta_formas_siou / f"{side}{transformed_job_id}.dat"
+            renamed = False
 
-            if not source.exists():
-                log(f"Arquivo não encontrado em formas siou: {source.name}")
-                continue
+            for attempt in range(2):
+                if source.exists() and self._is_file_from_today(source):
+                    self._rename_formas_siou_file(source, target)
+                    renamed = True
+                    break
 
-            try:
-                target.write_bytes(source.read_bytes())
-                log(f"Arquivo gerado em formas siou: {target.name}")
-            except Exception as e:
-                log(f"Erro ao gerar arquivo '{target.name}': {e}")
+                if attempt == 0:
+                    if not source.exists():
+                        log(
+                            f"Arquivo não encontrado em formas siou: {source.name}. "
+                            "Aguardando 10 segundos para tentar novamente."
+                        )
+                    else:
+                        log(
+                            f"Arquivo '{source.name}' não é de hoje. "
+                            "Aguardando 10 segundos para tentar novamente."
+                        )
+                    time.sleep(10)
+
+            if not renamed:
+                log(
+                    f"Não foi possível renomear '{source.name}' após duas tentativas. "
+                    "Etapa será ignorada."
+                )
+                self._delete_host_saved_file(job_id)
+
+    def _is_file_from_today(self, file_path: Path) -> bool:
+        modified_date = date.fromtimestamp(file_path.stat().st_mtime)
+        return modified_date == date.today()
+
+    def _rename_formas_siou_file(self, source: Path, target: Path):
+        try:
+            if target.exists():
+                target.unlink()
+
+            source.rename(target)
+            log(f"Arquivo renomeado em formas siou: {source.name} -> {target.name}")
+        except Exception as e:
+            log(f"Erro ao renomear arquivo '{source.name}' para '{target.name}': {e}")
+
+    def _delete_host_saved_file(self, job_id: str):
+        host_saved_file = self.pasta / f"{job_id}.{self.ext}"
+
+        if not host_saved_file.exists():
+            log(
+                "Arquivo salvo do host não encontrado para exclusão na pasta de saída: "
+                f"{host_saved_file.name}"
+            )
+            return
+
+        try:
+            host_saved_file.unlink()
+            log(f"Arquivo salvo do host excluído da pasta de saída: {host_saved_file.name}")
+        except Exception as e:
+            log(
+                f"Erro ao excluir arquivo salvo do host '{host_saved_file.name}' "
+                f"da pasta de saída: {e}"
+            )
 
     # ==================================================
     # REGRA PRINCIPAL DE ESPELHO
