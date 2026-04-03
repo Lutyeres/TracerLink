@@ -1,0 +1,158 @@
+Index: src/domain/job.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import re\r\nfrom pathlib import Path\r\nimport urllib.request\r\nimport hashlib\r\n\r\nfrom src.config.base import BASE_DIR\r\nfrom src.config import settings\r\nfrom src.utils.logger import log\r\n\r\nTRCFMT_R = \"TRCFMT=1;800;E;R;P\"\r\nTRCFMT_L = \"TRCFMT=1;800;E;L;P\"\r\n\r\nBLOCK_SIZE = 100\r\nTOTAL_POINTS = 800\r\nVALUES_PER_LINE = 8\r\n\r\n\r\nclass Job:\r\n\r\n    def __init__(self):\r\n        settings.carregar_config()\r\n\r\n        self.hash_file = BASE_DIR / \".last_hash\"\r\n        self.host = settings.get_host()\r\n        self.endpoint = settings.get_endpoint()\r\n        self.ext = settings.get_ext()\r\n        self.pasta = Path(settings.get_pasta())\r\n\r\n        self.pasta.mkdir(parents=True, exist_ok=True)\r\n\r\n        self._last_state = None\r\n        self._previous_state = None\r\n\r\n    # ==================================================\r\n    # EXECUÇÃO PRINCIPAL\r\n    # ==================================================\r\n\r\n    def run_once(self):\r\n\r\n        self._last_state = None\r\n\r\n        if not self.host:\r\n            self._last_state = \"ERROR\"\r\n            self._emit_state_log()\r\n            return\r\n\r\n        url = f\"{self.host}{self.endpoint}\"\r\n\r\n        try:\r\n            content = self._http_get(url)\r\n        except Exception:\r\n            self._last_state = \"ERROR\"\r\n            self._emit_state_log()\r\n            return\r\n\r\n        job_id = self._extract_job_id(content)\r\n        if not job_id:\r\n            self._last_state = \"NOT_FOUND\"\r\n            self._emit_state_log()\r\n            return\r\n\r\n        content = self._ensure_complete_file(content)\r\n        current_hash = self._generate_hash(content)\r\n\r\n        if self.hash_file.exists():\r\n            try:\r\n                last_hash = self.hash_file.read_text().strip()\r\n                if current_hash == last_hash:\r\n                    self._last_state = \"UNCHANGED\"\r\n                    self._emit_state_log()\r\n                    return\r\n            except Exception:\r\n                pass\r\n\r\n        file_path = self.pasta / f\"{job_id}.{self.ext}\"\r\n\r\n        try:\r\n            file_path.write_text(content, encoding=\"utf-8\")\r\n        except Exception:\r\n            self._last_state = \"ERROR\"\r\n            self._emit_state_log()\r\n            return\r\n\r\n        try:\r\n            self.hash_file.write_text(current_hash)\r\n        except Exception:\r\n            pass\r\n\r\n        self._last_state = \"NEW\"\r\n        self._emit_state_log()\r\n\r\n    # ==================================================\r\n    # LOG CONTROLADO\r\n    # ==================================================\r\n\r\n    def _emit_state_log(self):\r\n        if self._last_state != self._previous_state:\r\n            log(f\"Estado alterado para: {self._last_state}\")\r\n        self._previous_state = self._last_state\r\n\r\n    def get_last_state(self):\r\n        return self._last_state\r\n\r\n    # ==================================================\r\n    # AUXILIARES\r\n    # ==================================================\r\n\r\n    def _generate_hash(self, content: str) -> str:\r\n        return hashlib.sha256(content.encode(\"utf-8\")).hexdigest()\r\n\r\n    def _http_get(self, url: str) -> str:\r\n        with urllib.request.urlopen(url, timeout=15) as response:\r\n            return response.read().decode(\"utf-8\", errors=\"replace\")\r\n\r\n    def _extract_job_id(self, content: str):\r\n        match = re.search(r\"\\b(?:JOB|job)\\s*=\\s*([0-9]+)\\b\", content)\r\n        return match.group(1) if match else None\r\n\r\n    # ==================================================\r\n    # REGRA PRINCIPAL DE ESPELHO\r\n    # ==================================================\r\n\r\n    def _extract_block(self, lines, start_index, prefix):\r\n\r\n        block = [lines[start_index]]\r\n\r\n        for line in lines[start_index + 1:]:\r\n\r\n            if line.startswith(prefix):\r\n                block.append(line)\r\n            else:\r\n                break\r\n\r\n        return block\r\n\r\n    def _ensure_complete_file(self, content: str) -> str:\r\n\r\n        lines = content.splitlines()\r\n        lines = self._mirror_semicolon_values(lines)\r\n\r\n        trc_r_index = None\r\n        trc_l_index = None\r\n        z_r_index = None\r\n        z_l_index = None\r\n\r\n        # --------------------------------------\r\n        # Detectar blocos\r\n        # --------------------------------------\r\n\r\n        for i, line in enumerate(lines):\r\n\r\n            if line.startswith(\"TRCFMT\"):\r\n                parts = line.split(\";\")\r\n                if len(parts) >= 4:\r\n                    side = parts[3]\r\n\r\n                    if side == \"R\":\r\n                        trc_r_index = i\r\n\r\n                    if side == \"L\":\r\n                        trc_l_index = i\r\n\r\n            if line.startswith(\"ZFMT\"):\r\n                parts = line.split(\";\")\r\n                if len(parts) >= 4:\r\n                    side = parts[3]\r\n\r\n                    if side == \"R\":\r\n                        z_r_index = i\r\n\r\n                    if side == \"L\":\r\n                        z_l_index = i\r\n\r\n        # --------------------------------------\r\n        # Extrair blocos existentes\r\n        # --------------------------------------\r\n\r\n        r_block = []\r\n        l_block = []\r\n\r\n        zr_block = []\r\n        zl_block = []\r\n\r\n        if trc_r_index is not None:\r\n            r_block = lines[trc_r_index: trc_r_index + 1 + BLOCK_SIZE]\r\n\r\n        if trc_l_index is not None:\r\n            l_block = lines[trc_l_index: trc_l_index + 1 + BLOCK_SIZE]\r\n\r\n        if z_r_index is not None:\r\n            zr_block = self._extract_block(lines, z_r_index, \"Z=\")\r\n\r\n        if z_l_index is not None:\r\n            zl_block = self._extract_block(lines, z_l_index, \"Z=\")\r\n\r\n        # --------------------------------------\r\n        # Espelhar TRCFMT se necessário\r\n        # --------------------------------------\r\n\r\n        if r_block and not l_block:\r\n            new_header = r_block[0].replace(\";R;\", \";L;\")\r\n            l_block = self._mirror_block(r_block, new_header)\r\n\r\n        if l_block and not r_block:\r\n            new_header = l_block[0].replace(\";L;\", \";R;\")\r\n            r_block = self._mirror_block(l_block, new_header)\r\n\r\n        # --------------------------------------\r\n        # Espelhar ZFMT se necessário\r\n        # --------------------------------------\r\n\r\n        if zr_block and not zl_block:\r\n            new_header = zr_block[0].replace(\";R;\", \";L;\")\r\n            zl_block = [new_header] + zr_block[1:]\r\n\r\n        if zl_block and not zr_block:\r\n            new_header = zl_block[0].replace(\";L;\", \";R;\")\r\n            zr_block = [new_header] + zl_block[1:]\r\n\r\n        # --------------------------------------\r\n        # Limpar blocos antigos\r\n        # --------------------------------------\r\n\r\n        blocks_to_remove = (\r\n                r_block + l_block + zr_block + zl_block\r\n        )\r\n\r\n        lines_clean = [\r\n            l for l in lines\r\n            if l not in blocks_to_remove\r\n        ]\r\n\r\n        # --------------------------------------\r\n        # Inserir novos blocos após JOB\r\n        # --------------------------------------\r\n\r\n        job_index = next(\r\n            i for i, l in enumerate(lines_clean)\r\n            if l.startswith(\"JOB=\")\r\n        )\r\n\r\n        insert_pos = job_index + 1\r\n\r\n        new_lines = (\r\n                lines_clean[:insert_pos]\r\n                + r_block\r\n                + l_block\r\n                + zr_block\r\n                + zl_block\r\n                + lines_clean[insert_pos:]\r\n        )\r\n\r\n        return \"\\n\".join(new_lines) + \"\\n\"\r\n\r\n    # ==================================================\r\n    # ESPELHO CIRCULAR REAL (800 PONTOS)\r\n    # ==================================================\r\n\r\n    def _mirror_block(self, block: list[str], new_header: str) -> list[str]:\r\n\r\n        values = []\r\n\r\n        for line in block[1:]:\r\n            if line.startswith(\"R=\"):\r\n                nums = line[2:].split(\";\")\r\n                values.extend(int(n) for n in nums if n.strip())\r\n\r\n        if len(values) != TOTAL_POINTS:\r\n            raise ValueError(\r\n                f\"Esperado {TOTAL_POINTS} pontos, encontrado {len(values)}\"\r\n            )\r\n\r\n        # Espelhamento angular real\r\n        mirrored = [\r\n            values[(400 - i) % 800]\r\n            for i in range(800)\r\n        ]\r\n\r\n        new_lines = []\r\n\r\n        for i in range(0, TOTAL_POINTS, VALUES_PER_LINE):\r\n            chunk = mirrored[i:i + VALUES_PER_LINE]\r\n            line = \"R=\" + \";\".join(str(v) for v in chunk)\r\n            new_lines.append(line)\r\n        print(\"espelhado\")\r\n        return [new_header] + new_lines\r\n\r\n    # ==================================================\r\n    # ESPELHO \";?\"\r\n    # ==================================================\r\n\r\n    def _mirror_semicolon_values(self, lines):\r\n\r\n        mirrored = []\r\n\r\n        for line in lines:\r\n\r\n            if \"=\" not in line or \";\" not in line:\r\n                mirrored.append(line)\r\n                continue\r\n\r\n            key, value = line.split(\"=\", 1)\r\n            parts = value.split(\";\")\r\n\r\n            if len(parts) != 2:\r\n                mirrored.append(line)\r\n                continue\r\n\r\n            left = parts[0].strip()\r\n            right = parts[1].strip()\r\n\r\n            if right == \"?\" and left != \"?\":\r\n                mirrored.append(f\"{key}={left};{left}\")\r\n                continue\r\n\r\n            if left == \"?\" and right != \"?\":\r\n                mirrored.append(f\"{key}={right};{right}\")\r\n                continue\r\n\r\n            mirrored.append(line)\r\n\r\n        return mirrored
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/domain/job.py b/src/domain/job.py
+--- a/src/domain/job.py	(revision 2ed48e3065531e6ef77f5edbee25b6dbe0d7df76)
++++ b/src/domain/job.py	(date 1775254004841)
+@@ -1,4 +1,6 @@
+ import re
++import time
++from datetime import date
+ from pathlib import Path
+ import urllib.request
+ import hashlib
+@@ -25,12 +27,32 @@
+         self.endpoint = settings.get_endpoint()
+         self.ext = settings.get_ext()
+         self.pasta = Path(settings.get_pasta())
++        self.pasta_formas_siou = Path(settings.get_pasta_formas_siou())
++
++        if not str(self.pasta_formas_siou).strip():
++            self.pasta_formas_siou = self._resolve_formas_siou_folder()
+ 
+         self.pasta.mkdir(parents=True, exist_ok=True)
+ 
+         self._last_state = None
+         self._previous_state = None
+ 
++    def _resolve_formas_siou_folder(self) -> Path:
++        candidates = [
++            BASE_DIR / "formas siou",
++            BASE_DIR / "Formas Siou",
++            BASE_DIR / "FormasSiou",
++            self.pasta.parent / "formas siou",
++            self.pasta.parent / "Formas Siou",
++            self.pasta.parent / "FormasSiou",
++        ]
++
++        for candidate in candidates:
++            if candidate.exists() and candidate.is_dir():
++                return candidate
++
++        return candidates[0]
++
+     # ==================================================
+     # EXECUÇÃO PRINCIPAL
+     # ==================================================
+@@ -81,6 +103,10 @@
+             self._emit_state_log()
+             return
+ 
++        log(f"Job salvo: {file_path.name}")
++        time.sleep(25)
++        self._process_formas_siou_files(job_id)
++
+         try:
+             self.hash_file.write_text(current_hash)
+         except Exception:
+@@ -94,6 +120,10 @@
+     # ==================================================
+ 
+     def _emit_state_log(self):
++        if self._last_state == "UNCHANGED":
++            self._previous_state = self._last_state
++            return
++
+         if self._last_state != self._previous_state:
+             log(f"Estado alterado para: {self._last_state}")
+         self._previous_state = self._last_state
+@@ -116,6 +146,78 @@
+         match = re.search(r"\b(?:JOB|job)\s*=\s*([0-9]+)\b", content)
+         return match.group(1) if match else None
+ 
++    def _process_formas_siou_files(self, job_id: str):
++        if not self.pasta_formas_siou.exists():
++            log(f"Pasta 'formas siou' não encontrada: {self.pasta_formas_siou}")
++            return
++
++        padded_job_id = str(job_id).zfill(6)
++        transformed_job_id = f"{padded_job_id[0]}T{padded_job_id[2:]}"
++
++        for side in ("L", "R"):
++            source = self.pasta_formas_siou / f"{side}{padded_job_id}.dat"
++            target = self.pasta_formas_siou / f"{side}{transformed_job_id}.dat"
++            renamed = False
++
++            for attempt in range(2):
++                if source.exists() and self._is_file_from_today(source):
++                    self._rename_formas_siou_file(source, target)
++                    renamed = True
++                    break
++
++                if attempt == 0:
++                    if not source.exists():
++                        log(
++                            f"Arquivo não encontrado em formas siou: {source.name}. "
++                            "Aguardando 10 segundos para tentar novamente."
++                        )
++                    else:
++                        log(
++                            f"Arquivo '{source.name}' não é de hoje. "
++                            "Aguardando 10 segundos para tentar novamente."
++                        )
++                    time.sleep(10)
++
++            if not renamed:
++                log(
++                    f"Não foi possível renomear '{source.name}' após duas tentativas. "
++                    "Etapa será ignorada."
++                )
++                self._delete_host_saved_file(job_id)
++
++    def _is_file_from_today(self, file_path: Path) -> bool:
++        modified_date = date.fromtimestamp(file_path.stat().st_mtime)
++        return modified_date == date.today()
++
++    def _rename_formas_siou_file(self, source: Path, target: Path):
++        try:
++            if target.exists():
++                target.unlink()
++
++            source.rename(target)
++            log(f"Arquivo renomeado em formas siou: {source.name} -> {target.name}")
++        except Exception as e:
++            log(f"Erro ao renomear arquivo '{source.name}' para '{target.name}': {e}")
++
++    def _delete_host_saved_file(self, job_id: str):
++        host_saved_file = self.pasta / f"{job_id}.{self.ext}"
++
++        if not host_saved_file.exists():
++            log(
++                "Arquivo salvo do host não encontrado para exclusão na pasta de saída: "
++                f"{host_saved_file.name}"
++            )
++            return
++
++        try:
++            host_saved_file.unlink()
++            log(f"Arquivo salvo do host excluído da pasta de saída: {host_saved_file.name}")
++        except Exception as e:
++            log(
++                f"Erro ao excluir arquivo salvo do host '{host_saved_file.name}' "
++                f"da pasta de saída: {e}"
++            )
++
+     # ==================================================
+     # REGRA PRINCIPAL DE ESPELHO
+     # ==================================================
+@@ -319,4 +421,4 @@
+ 
+             mirrored.append(line)
+ 
+-        return mirrored
+\ No newline at end of file
++        return mirrored

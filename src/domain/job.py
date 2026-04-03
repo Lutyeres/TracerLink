@@ -28,6 +28,9 @@ class Job:
         self.ext = settings.get_ext()
         self.pasta = Path(settings.get_pasta())
         self.pasta_formas_siou = Path(settings.get_pasta_formas_siou())
+        self.quantidade_maxima_digitos_jitbox = (
+            settings.get_quantidade_maxima_digitos_jitbox()
+        )
 
         if not str(self.pasta_formas_siou).strip():
             self.pasta_formas_siou = self._resolve_formas_siou_folder()
@@ -104,8 +107,16 @@ class Job:
             return
 
         log(f"Job salvo: {file_path.name}")
-        time.sleep(25)
-        self._process_formas_siou_files(job_id)
+
+        if self._should_process_formas_siou(job_id):
+            time.sleep(25)
+            self._process_formas_siou_files(job_id)
+        else:
+            log(
+                "Job salvo sem processamento de formas siou: "
+                f"{job_id} excede o limite configurado de "
+                f"{self.quantidade_maxima_digitos_jitbox} digitos."
+            )
 
         try:
             self.hash_file.write_text(current_hash)
@@ -146,13 +157,19 @@ class Job:
         match = re.search(r"\b(?:JOB|job)\s*=\s*([0-9]+)\b", content)
         return match.group(1) if match else None
 
+    def _should_process_formas_siou(self, job_id: str) -> bool:
+        if self.quantidade_maxima_digitos_jitbox == 0:
+            return True
+
+        return len(str(job_id)) <= self.quantidade_maxima_digitos_jitbox
+
     def _process_formas_siou_files(self, job_id: str):
         if not self.pasta_formas_siou.exists():
             log(f"Pasta 'formas siou' não encontrada: {self.pasta_formas_siou}")
             return
 
         padded_job_id = str(job_id).zfill(6)
-        transformed_job_id = f"{padded_job_id[0]}T{padded_job_id[2:]}"
+        transformed_job_id = f"T{padded_job_id}"
 
         for side in ("L", "R"):
             source = self.pasta_formas_siou / f"{side}{padded_job_id}.dat"

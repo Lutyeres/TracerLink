@@ -18,6 +18,7 @@ def criar_config_padrao():
     config["STORAGE"] = {
         "pasta": str(BASE_DIR / "FormasTracer"),
         "pasta_formas_siou": str(BASE_DIR / "formas siou"),
+        "quantidade_maxima_digitos_jitbox": "4",
     }
 
     salvar_config()
@@ -45,11 +46,23 @@ def carregar_config():
         config["STORAGE"]["pasta_formas_siou"] = str(BASE_DIR / "formas siou")
         changed = True
 
+    if "quantidade_maxima_digitos_jitbox" not in config["STORAGE"]:
+        config["STORAGE"]["quantidade_maxima_digitos_jitbox"] = "4"
+        changed = True
+
     if changed:
         salvar_config()
 
 
-def atualizar_config(host, endpoint, ext, poll_seconds, pasta, pasta_formas_siou):
+def atualizar_config(
+    host,
+    endpoint,
+    ext,
+    poll_seconds,
+    pasta,
+    pasta_formas_siou,
+    quantidade_maxima_digitos_jitbox,
+):
 
     if "SERVER" not in config:
         config["SERVER"] = {}
@@ -63,6 +76,9 @@ def atualizar_config(host, endpoint, ext, poll_seconds, pasta, pasta_formas_siou
     config["SERVER"]["poll_seconds"] = str(poll_seconds)
     config["STORAGE"]["pasta"] = pasta
     config["STORAGE"]["pasta_formas_siou"] = pasta_formas_siou
+    config["STORAGE"]["quantidade_maxima_digitos_jitbox"] = str(
+        quantidade_maxima_digitos_jitbox
+    )
 
     salvar_config()
 
@@ -94,3 +110,13 @@ def get_pasta():
 
 def get_pasta_formas_siou():
     return config["STORAGE"].get("pasta_formas_siou", str(BASE_DIR / "formas siou"))
+
+
+def get_quantidade_maxima_digitos_jitbox():
+    valor = config["STORAGE"].get("quantidade_maxima_digitos_jitbox", "4")
+
+    try:
+        quantidade = int(valor)
+        return quantidade if quantidade >= 0 else 4
+    except (TypeError, ValueError):
+        return 4

@@ -159,6 +159,7 @@ class MainWindow(QWidget):
         self.input_poll = QLineEdit()
         self.input_pasta = QLineEdit()
         self.input_pasta_formas_siou = QLineEdit()
+        self.input_quantidade_maxima_digitos_jitbox = QLineEdit()
 
         form.addRow("Host:", self.input_host)
         form.addRow("Endpoint:", self.input_endpoint)
@@ -166,6 +167,7 @@ class MainWindow(QWidget):
         form.addRow("Intervalo (s):", self.input_poll)
         form.addRow("Pasta:", self.input_pasta)
         form.addRow("Pasta formas siou:", self.input_pasta_formas_siou)
+        form.addRow("Qtd. maxima digitos jitbox:", self.input_quantidade_maxima_digitos_jitbox)
 
         main_layout.addLayout(form)
 
@@ -220,6 +222,7 @@ class MainWindow(QWidget):
         poll = self.input_poll.text().strip()
         pasta = self.input_pasta.text().strip()
         pasta_formas_siou = self.input_pasta_formas_siou.text().strip()
+        quantidade_maxima_digitos_jitbox = self.input_quantidade_maxima_digitos_jitbox.text().strip()
 
         if not host:
             QMessageBox.critical(self, "Erro", "Host não pode ser vazio.")
@@ -234,6 +237,18 @@ class MainWindow(QWidget):
             return
 
         try:
+            quantidade_maxima_digitos_jitbox = int(quantidade_maxima_digitos_jitbox)
+            if quantidade_maxima_digitos_jitbox < 0:
+                raise ValueError
+        except ValueError:
+            QMessageBox.critical(
+                self,
+                "Erro",
+                "Qtd. maxima de digitos da jitbox deve ser numero maior ou igual a 0.",
+            )
+            return
+
+        try:
             settings.atualizar_config(
                 host=host,
                 endpoint=endpoint,
@@ -241,6 +256,7 @@ class MainWindow(QWidget):
                 poll_seconds=poll,
                 pasta=pasta,
                 pasta_formas_siou=pasta_formas_siou,
+                quantidade_maxima_digitos_jitbox=quantidade_maxima_digitos_jitbox,
             )
 
         except Exception as e:
@@ -320,6 +336,9 @@ class MainWindow(QWidget):
         self.input_poll.setText(str(settings.get_poll_seconds()))
         self.input_pasta.setText(settings.get_pasta())
         self.input_pasta_formas_siou.setText(settings.get_pasta_formas_siou())
+        self.input_quantidade_maxima_digitos_jitbox.setText(
+            str(settings.get_quantidade_maxima_digitos_jitbox())
+        )
 
     # ======================================================
 
